@@ -136,6 +136,31 @@ pub struct Irc {
     pub status: ConnectionStatus,
 }
 
+pub struct ChannelHandle {
+    writer: Writer,
+    target: String,
+}
+
+impl ChannelHandle {
+    /// Send a raw message
+    ///
+    /// Sends a raw message. A newline is added for you. If your message includes a newline,
+    /// it will be refused as a multiline message.
+    pub fn raw<S: AsRef<str>>(&self, raw: S) -> Result<(), Error> {
+        let raw = raw.as_ref();
+        if raw.contains("\n") || raw.contains("\r") {
+            return Err(Error::Multiline)
+        }
+        try!(self.writer.raw(format!("{}\n", raw)));
+        Ok(())
+    }
+
+    /// PRIVMSG command.
+    pub fn privmsg(&self, text: &str) -> Result<(), Error> {
+        self.raw(format!("PRIVMSG {} :{}", self.target, text))
+    }
+}
+
 impl Irc {
 
     fn new(writer: Writer) -> Irc {
@@ -143,6 +168,17 @@ impl Irc {
             writer: writer,
             status: ConnectionStatus::Connected,
             channels: HashMap::new(),
+        }
+    }
+
+    /// Create a handle for the provided target
+    ///
+    /// Clones the underlying writer and provides a handle to the provided channel
+    /// so that messages can be sent asynchronously.
+    pub fn get_handle<T: Into<String>>(&self, target: T) -> ChannelHandle {
+        ChannelHandle {
+            writer: self.writer.clone(),
+            target: target.into(),
         }
     }
 
